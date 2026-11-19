@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Environment files hold secrets. Only the template (.env.example) is committed.
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
