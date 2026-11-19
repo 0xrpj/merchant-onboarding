@@ -1,0 +1,53 @@
+# Local infrastructure: PostgreSQL (data) and Redis (BullMQ queue).
+# Values come from .env (copy .env.example to .env first).
+#
+#   docker compose up -d     start in the background
+#   docker compose ps        both services should be "healthy"
+#   docker compose down      stop (data is kept in the volumes)
+#   docker compose down -v   stop and DELETE all data
+
+name: merchant-onboarding
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-merchant}
+      POSTGRES_DB: ${POSTGRES_DB:-merchant_onboarding}
+      # No default on purpose: the password must come from your local .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      # 127.0.0.1 = reachable only from this machine, not from the network.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql (not .../data).
+      - postgres-data:/var/lib/postgresql
+      # Scripts here run once, when the data volume is first created.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # $$ makes Compose leave $ alone, so the variables are read inside the container.
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # appendonly: queued jobs survive a Redis restart.
+    # noeviction: Redis never silently drops keys when memory is full. BullMQ requires this.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
