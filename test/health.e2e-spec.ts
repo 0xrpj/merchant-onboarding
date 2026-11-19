@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '@/app.module';
+import { configureApp } from '@/app.setup';
 
 describe('Health (e2e)', () => {
   let app: INestApplication<App>;
@@ -13,6 +14,8 @@ describe('Health (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    // Same prefix and validation as the real app.
+    configureApp(app);
     await app.init();
   });
 
@@ -20,10 +23,14 @@ describe('Health (e2e)', () => {
     await app.close();
   });
 
-  it('GET /health answers 200 with status ok', async () => {
+  it('GET /api/v1/health answers 200 with status ok', async () => {
     await request(app.getHttpServer())
-      .get('/health')
+      .get('/api/v1/health')
       .expect(200)
       .expect({ status: 'ok' });
+  });
+
+  it('GET /health without the prefix is 404', async () => {
+    await request(app.getHttpServer()).get('/health').expect(404);
   });
 });
