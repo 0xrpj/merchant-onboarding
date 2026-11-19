@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API · Merchant Onboarding Design</title>
+<meta name="description" content="Endpoints, request and response examples, owner editing, pagination and the error format.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f7f9;
+    --text: #1b1f27;
+    --muted: #5d6675;
+    --border: #e2e6ec;
+    --accent: #2b62d9;
+    --accent-soft: #e9f0fd;
+    --ok: #1d7f47;
+    --ok-soft: #e5f4ec;
+    --warn: #9a5b00;
+    --warn-soft: #fff3dc;
+    --bad: #b8322a;
+    --bad-soft: #fdebe9;
+    --code-bg: #eef1f5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1218;
+      --surface: #161a22;
+      --text: #e5e8ee;
+      --muted: #9aa3b3;
+      --border: #2a303c;
+      --accent: #7aa5ff;
+      --accent-soft: #1a2540;
+      --ok: #56c98d;
+      --ok-soft: #132a1f;
+      --warn: #f2b44f;
+      --warn-soft: #2d2210;
+      --bad: #ff7a6e;
+      --bad-soft: #311816;
+      --code-bg: #1e232d;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1218;
+    --surface: #161a22;
+    --text: #e5e8ee;
+    --muted: #9aa3b3;
+    --border: #2a303c;
+    --accent: #7aa5ff;
+    --accent-soft: #1a2540;
+    --ok: #56c98d;
+    --ok-soft: #132a1f;
+    --warn: #f2b44f;
+    --warn-soft: #2d2210;
+    --bad: #ff7a6e;
+    --bad-soft: #311816;
+    --code-bg: #1e232d;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .layout {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 16px 80px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  @media (min-width: 1000px) {
+    .layout { grid-template-columns: 230px minmax(0, 1fr); gap: 40px; padding: 40px 32px 96px; }
+    nav.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+  }
+  nav.toc { font-size: .9rem; }
+  nav.toc .toc-title { font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: .75rem; letter-spacing: .06em; margin: 0 0 8px 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc a { display: block; padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  nav.toc a:hover { background: var(--surface); color: var(--text); }
+  main { min-width: 0; }
+  main > :not(figure.diagram) { max-width: 900px; }
+
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 12px; letter-spacing: -.01em; }
+  h2 { font-size: 1.45rem; line-height: 1.3; margin: 56px 0 12px; padding-top: 24px; border-top: 1px solid var(--border); scroll-margin-top: 8px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  main > h4 { font-size: 1rem; margin: 20px 0 6px; color: var(--muted); }
+  .lede { font-size: 1.08rem; color: var(--muted); margin-top: 0; }
+  .examples-note { font-size: .92rem; color: var(--muted); }
+  a { color: var(--accent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    padding: .1em .35em;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  ul, ol { padding-left: 1.4em; }
+  li { margin: 4px 0; }
+
+
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr.group td { background: var(--surface); font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  td.c, th.c { text-align: center; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--bad); }
+  .http { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; white-space: nowrap; }
+  .http.ok { color: var(--ok); }
+  .http.err { color: var(--bad); }
+
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout p { margin: 0; }
+  .callout p + p { margin-top: 8px; }
+
+  figure.diagram { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 16px; margin: 12px 0 20px; overflow-x: auto; }
+  figure.diagram pre.mermaid { margin: 0; font-size: .78rem; color: var(--muted); white-space: pre; }
+  figure.diagram svg { display: block; margin: 0 auto; }
+  figure.diagram.wide svg { min-width: 900px; }
+  figure.diagram figcaption { font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  .diagram-note { font-size: .88rem; }
+  pre.code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 12px 0 20px; overflow-x: auto; font: .8rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre.code code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+  table.endpoints td:nth-child(2) code { white-space: nowrap; overflow-wrap: normal; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 16px 0; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); }
+  .card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+  .card ul { margin: 6px 0 0; font-size: .92rem; color: var(--muted); }
+
+  .role { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 6px; vertical-align: 1px; }
+  .role.admin { background: var(--accent-soft); color: var(--accent); }
+  .role.reviewer { background: var(--ok-soft); color: var(--ok); }
+  .role.sales { background: var(--warn-soft); color: var(--warn); }
+
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
+
+  @media print {
+    nav.toc { display: none; }
+    .layout { display: block; padding: 0; }
+    h2 { break-after: avoid; }
+    figure.diagram, .table-wrap { break-inside: avoid; }
+  }
+
+  /* Multi-page navigation */
+  nav.toc .toc-title a { color: inherit; text-decoration: none; }
+  nav.toc a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav.toc ol.sub { margin: 2px 0 8px 14px; padding-left: 6px; border-left: 1px solid var(--border); }
+  nav.toc ol.sub a { font-size: .84rem; padding: 2px 8px; }
+  nav.toc ol.sub code { font-size: .8rem; background: none; padding: 0; }
+  @media (max-width: 999px) { nav.toc ol.sub { display: none; } }
+  .eyebrow { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+  h3 { scroll-margin-top: 8px; }
+  .page-cards a.card { display: block; color: inherit; text-decoration: none; }
+  .page-cards a.card:hover { border-color: var(--accent); }
+  .page-cards a.card h4 { color: var(--accent); }
+  .pager { display: flex; gap: 12px; margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .pager a { display: block; max-width: 48%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-decoration: none; }
+  .pager a:hover { border-color: var(--accent); }
+  .pager a span { display: block; font-size: .75rem; color: var(--muted); }
+  .pager .next { margin-left: auto; text-align: right; }
+  @media print { .pager { display: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Design pages">
+  <p class="toc-title"><a href="index.html">Merchant Onboarding Design</a></p>
+  <ol>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="access.html">1. Roles &amp; access</a></li>
+    <li><a href="lifecycle.html">2. Lifecycle</a></li>
+    <li><a href="flows.html">3. Flows &amp; reliability</a></li>
+    <li><a href="api.html" aria-current="page">4. API</a>
+      <ol class="sub"><li><a href="#conventions">Conventions</a></li><li><a href="#endpoints">Endpoints</a></li><li><a href="#create-an-application">Create an application</a></li><li><a href="#read-one-application">Read one application</a></li><li><a href="#editing-owners">Editing owners</a></li><li><a href="#listing-and-pagination">Listing and pagination</a></li><li><a href="#recording-a-decision">Recording a decision</a></li><li><a href="#error-format">Error format</a></li></ol></li>
+    <li><a href="auth.html">5. Authentication</a></li>
+    <li><a href="data-model.html">6. Data model</a></li>
+    <li><a href="sensitive-data.html">7. Sensitive data</a></li>
+    <li><a href="decisions.html">8. Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="page-header">
+  <p class="eyebrow">Merchant Onboarding Platform · Design · 4 of 8</p>
+  <h1 id="api">API</h1>
+  <p class="lede">Endpoints, request and response examples, owner editing, pagination and the error format.</p>
+</header>
+
+
+<h3 id="conventions">Conventions</h3>
+<ul>
+  <li><strong>Base path:</strong> all paths below are relative to <code>/api/v1</code>. Swagger UI is served at <code>/api/docs</code>.</li>
+  <li><strong>JSON:</strong> camelCase fields, timestamps in ISO 8601 UTC, and money as whole numbers in paisa, the same as the database (<code>expectedMonthlyVolumeMinor: 150000000</code>).</li>
+  <li><strong>Auth header:</strong> <code>Authorization: Bearer &lt;accessToken&gt;</code> on every endpoint except login, refresh, logout and health.</li>
+  <li><strong>Request ID:</strong> every response carries an <code>X-Request-Id</code> header, taken from the request or generated. The same ID appears in error bodies and audit entries.</li>
+  <li><strong>Unknown fields are rejected</strong> with 400. A client can't sneak <code>"status"</code>, <code>"createdById"</code> or <code>"assignedReviewerId"</code> into a create or edit request (mass-assignment protection).</li>
+  <li><strong>Action endpoints return the updated application.</strong> Submit and retry answer <span class="http ok">202 Accepted</span> because the risk check continues in the background.</li>
+</ul>
+
+<h3 id="endpoints">Endpoints</h3>
+<div class="table-wrap"><table class="endpoints">
+  <thead><tr><th>Method</th><th>Path</th><th>Who</th><th>Success</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr class="group"><td colspan="5">Auth (see <a href="auth.html">Authentication</a>)</td></tr>
+    <tr><td>POST</td><td><code>/auth/login</code></td><td>Public, rate-limited</td><td class="http ok">200</td><td>Email and password → access and refresh token</td></tr>
+    <tr><td>POST</td><td><code>/auth/refresh</code></td><td>Public, rate-limited</td><td class="http ok">200</td><td>Swap a refresh token for a new pair</td></tr>
+    <tr><td>POST</td><td><code>/auth/logout</code></td><td>Public (sends the refresh token)</td><td class="http ok">204</td><td>Ends the session</td></tr>
+    <tr><td>GET</td><td><code>/auth/me</code></td><td>Any logged-in user</td><td class="http ok">200</td><td>The current user</td></tr>
+    <tr class="group"><td colspan="5">Users</td></tr>
+    <tr><td>GET</td><td><code>/users?role=REVIEWER</code></td><td>ADMIN</td><td class="http ok">200</td><td>Find a reviewer to assign</td></tr>
+    <tr class="group"><td colspan="5">Applications</td></tr>
+    <tr><td>POST</td><td><code>/applications</code></td><td>SALES, ADMIN</td><td class="http ok">201</td><td>Created as DRAFT</td></tr>
+    <tr><td>GET</td><td><code>/applications</code></td><td>Everyone, scoped by role</td><td class="http ok">200</td><td>Filters and pagination</td></tr>
+    <tr><td>GET</td><td><code>/applications/:id</code></td><td>Everyone, scoped by role</td><td class="http ok">200</td><td>Full detail</td></tr>
+    <tr><td>PATCH</td><td><code>/applications/:id</code></td><td>Owner (SALES), ADMIN</td><td class="http ok">200</td><td>Only in DRAFT or INFO_REQUESTED</td></tr>
+    <tr><td>POST</td><td><code>/applications/:id/submit</code></td><td>Owner (SALES), ADMIN</td><td class="http ok">202</td><td>Submit and resubmit</td></tr>
+    <tr><td>POST</td><td><code>/applications/:id/assign</code></td><td>ADMIN</td><td class="http ok">200</td><td>Body: <code>{ "reviewerId": "…" }</code></td></tr>
+    <tr><td>POST</td><td><code>/applications/:id/decisions</code></td><td>Assigned REVIEWER</td><td class="http ok">200</td><td>Body: <code>{ "decision": "APPROVE" | "REJECT" | "REQUEST_INFO", "note": "…" }</code></td></tr>
+    <tr><td>POST</td><td><code>/applications/:id/risk-assessments/retry</code></td><td>ADMIN</td><td class="http ok">202</td><td>Only when the risk status is FAILED</td></tr>
+    <tr><td>GET</td><td><code>/applications/:id/audit-logs</code></td><td>ADMIN</td><td class="http ok">200</td><td>Paginated history of one application</td></tr>
+    <tr class="group"><td colspan="5">System</td></tr>
+    <tr><td>GET</td><td><code>/health</code></td><td>Public</td><td class="http ok">200</td><td>Database and Redis check, used by Docker Compose</td></tr>
+  </tbody>
+</table></div>
+<p>Each lifecycle endpoint maps to one row of the <a href="lifecycle.html#allowed-transitions">allowed transitions</a> table, with its own input, permission check and tests.</p>
+
+<h3 id="create-an-application">Create an application</h3>
+<pre class="code"><code>POST /api/v1/applications
+{
+  "businessName": "Himal Brew Café",
+  "legalBusinessName": "Himal Brew Pvt. Ltd.",
+  "businessType": "PRIVATE_LIMITED",
+  "industry": "FOOD_AND_BEVERAGE",
+  "registrationNumber": "REG-111",
+  "processing": {
+    "expectedMonthlyVolumeMinor": 150000000,
+    "averageTransactionMinor": 65000,
+    "currency": "NPR",
+    "channels": ["CARD_PRESENT"]
+  },
+  "owners": [
+    { "fullName": "Owner A", "email": "owner.a@himalbrew.example", "phone": "+9779800000001",
+      "ownershipPercent": 60, "isPrimaryContact": true, "nationalId": "00-00-00-06789" },
+    { "fullName": "Owner B", "email": "owner.b@himalbrew.example", "phone": "+9779800000002",
+      "ownershipPercent": 40, "isPrimaryContact": false, "nationalId": "00-00-00-01234" }
+  ]
+}</code></pre>
+
+<h3 id="read-one-application">Read one application</h3>
+<pre class="code"><code>GET /api/v1/applications/:id   → 200
+{
+  "id": "3f6c…",
+  "businessName": "Himal Brew Café",
+  "legalBusinessName": "Himal Brew Pvt. Ltd.",
+  "businessType": "PRIVATE_LIMITED",
+  "industry": "FOOD_AND_BEVERAGE",
+  "registrationNumber": "REG-111",
+  "processing": { "expectedMonthlyVolumeMinor": 150000000, "averageTransactionMinor": 65000,
+                  "currency": "NPR", "channels": ["CARD_PRESENT"] },
+  "owners": [
+    { "id": "9a1e…", "fullName": "Owner A", "email": "owner.a@himalbrew.example",
+      "phone": "+9779800000001", "ownershipPercent": 60, "isPrimaryContact": true,
+      "nationalIdMasked": "•••••6789" }
+  ],
+  "status": "IN_REVIEW",
+  "riskStatus": "COMPLETED",
+  "riskLevel": "LOW",
+  "submissionCount": 1,
+  "createdBy": { "id": "…", "fullName": "Sita" },
+  "assignedReviewer": { "id": "…", "fullName": "Ram" },
+  "riskAssessments": [
+    { "submissionNumber": 1, "status": "COMPLETED", "riskScore": 22, "riskLevel": "LOW",
+      "reasons": ["Low-risk industry"], "completedAt": "2026-11-19T10:16:04Z" }
+  ],
+  "decisions": [],
+  "submittedAt": "2026-11-19T10:15:58Z",
+  "decidedAt": null,
+  "createdAt": "2026-11-19T10:02:11Z",
+  "updatedAt": "2026-11-19T10:16:04Z"
+}</code></pre>
+<ul>
+  <li>The full national ID never appears in any response, only <code>nationalIdMasked</code>.</li>
+  <li><span class="role sales">SALES</span> users get <code>riskAssessments</code> without <code>riskScore</code> and <code>reasons</code>. On a need-to-know basis, a sales rep shouldn't be able to coach a merchant around the checks.</li>
+</ul>
+
+<h3 id="editing-owners">Editing owners</h3>
+<p><code>PATCH</code> sends the <strong>whole</strong> owners list:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>What you send</th><th>What happens</th></tr></thead>
+  <tbody>
+    <tr><td>An owner <strong>with</strong> <code>id</code></td><td>That owner is updated. <code>nationalId</code> is optional; leave it out to keep the stored one</td></tr>
+    <tr><td>An owner <strong>without</strong> <code>id</code></td><td>A new owner is added. <code>nationalId</code> is required</td></tr>
+    <tr><td>An existing owner you <strong>leave out</strong></td><td>That owner is removed</td></tr>
+    <tr><td>An <code>id</code> belonging to a <strong>different</strong> application</td><td><span class="http err">400</span>. This blocks tampering with another application's owners</td></tr>
+  </tbody>
+</table></div>
+<p>After the changes are applied, the list must still have 1 to 10 owners, total ownership of at most 100%, and exactly one primary contact. The same "send the whole group" rule applies to <code>processing</code>; top-level fields such as <code>businessName</code> can be sent one at a time.</p>
+
+<h3 id="listing-and-pagination">Listing and pagination</h3>
+<pre class="code"><code>GET /api/v1/applications?status=IN_REVIEW,INFO_REQUESTED&amp;riskLevel=HIGH&amp;unassigned=true&amp;page=1&amp;limit=20</code></pre>
+<ul>
+  <li><strong>Filters:</strong> <code>status</code> (one or more), <code>riskStatus</code>, <code>riskLevel</code>, <code>assignedReviewerId</code>, <code>unassigned</code>. <strong>Filters only narrow what you can already see.</strong> If Sita filters by Ram, she still only sees her own applications.</li>
+  <li><strong>Paging:</strong> <code>page</code> defaults to 1. <code>limit</code> defaults to 20, with a maximum of 100. Newest first.</li>
+  <li><strong>List items are a summary</strong> with no owners or risk details. Use the detail endpoint for those.</li>
+</ul>
+<pre class="code"><code>{
+  "data": [
+    { "id": "…", "businessName": "Himal Brew Café", "status": "IN_REVIEW", "riskStatus": "COMPLETED",
+      "riskLevel": "LOW", "createdBy": { "id": "…", "fullName": "Sita" }, "assignedReviewer": null,
+      "submissionCount": 1, "createdAt": "…", "updatedAt": "…" }
+  ],
+  "meta": { "page": 1, "limit": 20, "total": 57, "totalPages": 3 }
+}</code></pre>
+
+<h3 id="recording-a-decision">Recording a decision</h3>
+<pre class="code"><code>POST /api/v1/applications/:id/decisions
+{ "decision": "REQUEST_INFO", "note": "Registration number doesn't match the company registry" }</code></pre>
+<p>A <code>note</code> (up to 2,000 characters) is required for <code>REJECT</code> and <code>REQUEST_INFO</code>, and for <code>APPROVE</code> when the risk level is HIGH. Without one, the response is <span class="http err">400</span> <code>NOTE_REQUIRED</code>.</p>
+
+<h3 id="error-format">Error format</h3>
+<pre class="code"><code>{
+  "statusCode": 409,
+  "error": "Conflict",
+  "code": "INVALID_STATE_TRANSITION",
+  "message": "Cannot approve an application in SUBMITTED state",
+  "requestId": "6f1c…",
+  "timestamp": "2026-11-19T10:15:00.000Z"
+}</code></pre>
+<p>Validation errors add a <code>details</code> list naming each invalid field.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Status</th><th>Typical <code>code</code></th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td class="http err">400</td><td><code>VALIDATION_FAILED</code>, <code>NOTE_REQUIRED</code>, <code>INVALID_REVIEWER</code></td><td>Invalid input, unknown fields, malformed ID, the reviewer isn't an active REVIEWER, a required note is missing</td></tr>
+    <tr><td class="http err">401</td><td><code>UNAUTHORIZED</code>, <code>INVALID_CREDENTIALS</code>, <code>INVALID_REFRESH_TOKEN</code></td><td>Missing, expired or invalid token; wrong login; bad or reused refresh token</td></tr>
+    <tr><td class="http err">403</td><td><code>FORBIDDEN</code></td><td>Your role can never do this</td></tr>
+    <tr><td class="http err">404</td><td><code>NOT_FOUND</code></td><td>Doesn't exist, or you're not allowed to see it</td></tr>
+    <tr><td class="http err">409</td><td><code>INVALID_STATE_TRANSITION</code></td><td>Wrong state for this action, including when another request changed it first</td></tr>
+    <tr><td class="http err">429</td><td><code>RATE_LIMITED</code></td><td>Too many login or refresh attempts</td></tr>
+    <tr><td class="http err">500</td><td><code>INTERNAL_ERROR</code></td><td>Unexpected error. Generic message only; details go to the server logs, never the response</td></tr>
+  </tbody>
+</table></div>
+
+<nav class="pager" aria-label="Previous and next page">
+  <a class="prev" href="flows.html"><span>Previous</span>← 3. Flows &amp; reliability</a>
+  <a class="next" href="auth.html"><span>Next</span>5. Authentication →</a>
+</nav>
+</main>
+</div>
+</body>
+</html>

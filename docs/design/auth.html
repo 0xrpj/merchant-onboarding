@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authentication &amp; sessions · Merchant Onboarding Design</title>
+<meta name="description" content="Access and refresh tokens, rotation with reuse detection, and the login rules.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f7f9;
+    --text: #1b1f27;
+    --muted: #5d6675;
+    --border: #e2e6ec;
+    --accent: #2b62d9;
+    --accent-soft: #e9f0fd;
+    --ok: #1d7f47;
+    --ok-soft: #e5f4ec;
+    --warn: #9a5b00;
+    --warn-soft: #fff3dc;
+    --bad: #b8322a;
+    --bad-soft: #fdebe9;
+    --code-bg: #eef1f5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1218;
+      --surface: #161a22;
+      --text: #e5e8ee;
+      --muted: #9aa3b3;
+      --border: #2a303c;
+      --accent: #7aa5ff;
+      --accent-soft: #1a2540;
+      --ok: #56c98d;
+      --ok-soft: #132a1f;
+      --warn: #f2b44f;
+      --warn-soft: #2d2210;
+      --bad: #ff7a6e;
+      --bad-soft: #311816;
+      --code-bg: #1e232d;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1218;
+    --surface: #161a22;
+    --text: #e5e8ee;
+    --muted: #9aa3b3;
+    --border: #2a303c;
+    --accent: #7aa5ff;
+    --accent-soft: #1a2540;
+    --ok: #56c98d;
+    --ok-soft: #132a1f;
+    --warn: #f2b44f;
+    --warn-soft: #2d2210;
+    --bad: #ff7a6e;
+    --bad-soft: #311816;
+    --code-bg: #1e232d;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .layout {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 16px 80px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  @media (min-width: 1000px) {
+    .layout { grid-template-columns: 230px minmax(0, 1fr); gap: 40px; padding: 40px 32px 96px; }
+    nav.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+  }
+  nav.toc { font-size: .9rem; }
+  nav.toc .toc-title { font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: .75rem; letter-spacing: .06em; margin: 0 0 8px 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc a { display: block; padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  nav.toc a:hover { background: var(--surface); color: var(--text); }
+  main { min-width: 0; }
+  main > :not(figure.diagram) { max-width: 900px; }
+
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 12px; letter-spacing: -.01em; }
+  h2 { font-size: 1.45rem; line-height: 1.3; margin: 56px 0 12px; padding-top: 24px; border-top: 1px solid var(--border); scroll-margin-top: 8px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  main > h4 { font-size: 1rem; margin: 20px 0 6px; color: var(--muted); }
+  .lede { font-size: 1.08rem; color: var(--muted); margin-top: 0; }
+  .examples-note { font-size: .92rem; color: var(--muted); }
+  a { color: var(--accent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    padding: .1em .35em;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  ul, ol { padding-left: 1.4em; }
+  li { margin: 4px 0; }
+
+
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr.group td { background: var(--surface); font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  td.c, th.c { text-align: center; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--bad); }
+  .http { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; white-space: nowrap; }
+  .http.ok { color: var(--ok); }
+  .http.err { color: var(--bad); }
+
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout p { margin: 0; }
+  .callout p + p { margin-top: 8px; }
+
+  figure.diagram { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 16px; margin: 12px 0 20px; overflow-x: auto; }
+  figure.diagram pre.mermaid { margin: 0; font-size: .78rem; color: var(--muted); white-space: pre; }
+  figure.diagram svg { display: block; margin: 0 auto; }
+  figure.diagram.wide svg { min-width: 900px; }
+  figure.diagram figcaption { font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  .diagram-note { font-size: .88rem; }
+  pre.code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 12px 0 20px; overflow-x: auto; font: .8rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre.code code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+  table.endpoints td:nth-child(2) code { white-space: nowrap; overflow-wrap: normal; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 16px 0; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); }
+  .card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+  .card ul { margin: 6px 0 0; font-size: .92rem; color: var(--muted); }
+
+  .role { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 6px; vertical-align: 1px; }
+  .role.admin { background: var(--accent-soft); color: var(--accent); }
+  .role.reviewer { background: var(--ok-soft); color: var(--ok); }
+  .role.sales { background: var(--warn-soft); color: var(--warn); }
+
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
+
+  @media print {
+    nav.toc { display: none; }
+    .layout { display: block; padding: 0; }
+    h2 { break-after: avoid; }
+    figure.diagram, .table-wrap { break-inside: avoid; }
+  }
+
+  /* Multi-page navigation */
+  nav.toc .toc-title a { color: inherit; text-decoration: none; }
+  nav.toc a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav.toc ol.sub { margin: 2px 0 8px 14px; padding-left: 6px; border-left: 1px solid var(--border); }
+  nav.toc ol.sub a { font-size: .84rem; padding: 2px 8px; }
+  nav.toc ol.sub code { font-size: .8rem; background: none; padding: 0; }
+  @media (max-width: 999px) { nav.toc ol.sub { display: none; } }
+  .eyebrow { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+  h3 { scroll-margin-top: 8px; }
+  .page-cards a.card { display: block; color: inherit; text-decoration: none; }
+  .page-cards a.card:hover { border-color: var(--accent); }
+  .page-cards a.card h4 { color: var(--accent); }
+  .pager { display: flex; gap: 12px; margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .pager a { display: block; max-width: 48%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-decoration: none; }
+  .pager a:hover { border-color: var(--accent); }
+  .pager a span { display: block; font-size: .75rem; color: var(--muted); }
+  .pager .next { margin-left: auto; text-align: right; }
+  @media print { .pager { display: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Design pages">
+  <p class="toc-title"><a href="index.html">Merchant Onboarding Design</a></p>
+  <ol>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="access.html">1. Roles &amp; access</a></li>
+    <li><a href="lifecycle.html">2. Lifecycle</a></li>
+    <li><a href="flows.html">3. Flows &amp; reliability</a></li>
+    <li><a href="api.html">4. API</a></li>
+    <li><a href="auth.html" aria-current="page">5. Authentication</a>
+      <ol class="sub"><li><a href="#refresh-token-rotation-with-reuse-detection">Refresh token rotation with reuse detection</a></li><li><a href="#rules">Rules</a></li></ol></li>
+    <li><a href="data-model.html">6. Data model</a></li>
+    <li><a href="sensitive-data.html">7. Sensitive data</a></li>
+    <li><a href="decisions.html">8. Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="page-header">
+  <p class="eyebrow">Merchant Onboarding Platform · Design · 5 of 8</p>
+  <h1 id="auth">Authentication &amp; sessions</h1>
+  <p class="lede">Access and refresh tokens, rotation with reuse detection, and the login rules.</p>
+  <p class="callout warn diagram-note" hidden>The diagrams didn't load. They need an internet connection to fetch the Mermaid library. Each diagram's text source is still shown, and every table in this page works without it.</p>
+</header>
+
+
+<p>Login returns a short-lived <strong>access token</strong> and a longer-lived <strong>refresh token</strong>:</p>
+<pre class="code"><code>POST /api/v1/auth/login   → 200
+{
+  "accessToken": "eyJ…",
+  "tokenType": "Bearer",
+  "expiresIn": 900,
+  "refreshToken": "8Kp3…",
+  "refreshExpiresIn": 604800,
+  "user": { "id": "…", "fullName": "Sita", "role": "SALES" }
+}</code></pre>
+
+<div class="table-wrap"><table>
+  <thead><tr><th></th><th>Access token</th><th>Refresh token</th></tr></thead>
+  <tbody>
+    <tr><td>Format</td><td>JWT signed with a server-side secret; claims: user ID and role</td><td>32 random bytes, base64url-encoded</td></tr>
+    <tr><td>Lifetime</td><td>15 minutes (configurable)</td><td>7 days (configurable)</td></tr>
+    <tr><td>Stored on the server</td><td>No</td><td>Only its SHA-256 hash, in <code>refresh_tokens</code></td></tr>
+    <tr><td>How it's checked</td><td>Signature and expiry, then one lookup confirming the user still exists and is active</td><td>Database lookup by hash</td></tr>
+    <tr><td>Revocable</td><td>No; it simply expires</td><td>Yes: one token, or its whole family</td></tr>
+  </tbody>
+</table></div>
+<p>The user lookup on every request means a deactivated user is locked out immediately, and the role used for permission checks always comes from the database, not from the token.</p>
+
+<h3 id="refresh-token-rotation-with-reuse-detection">Refresh token rotation with reuse detection</h3>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as User's client
+    actor X as Attacker
+    participant API as API
+    participant DB as PostgreSQL
+    U->>API: Log in (email, password)
+    API->>DB: New family, store hash of T1
+    API-->>U: Access token + refresh token T1
+    Note over U: Access token expires after 15 minutes
+    U->>API: Refresh with T1
+    API->>DB: Lock T1, valid → mark T1 used, store T2 in the same family
+    API-->>U: New access token + T2
+    X->>API: Refresh with a stolen copy of T1
+    API->>DB: T1 already used → revoke the whole family (T2 too), audit entry
+    API-->>X: 401
+    U->>API: Refresh with T2
+    API-->>U: 401, log in again
+</pre>
+<figcaption>Every refresh token works once. Seeing a used one again means someone copied it, so the whole session is ended.</figcaption>
+</figure>
+
+<h3 id="rules">Rules</h3>
+<ul>
+  <li><strong>Logout</strong> revokes the refresh token's whole family and returns 204.</li>
+  <li><strong>Login failures all look the same.</strong> Unknown email, wrong password and deactivated account all return 401 "Invalid email or password", so nobody can discover which emails exist.</li>
+  <li><strong>Rate limiting:</strong> login and refresh allow a few attempts per minute per IP (for example 5), then return 429.</li>
+  <li><strong>Simultaneous refreshes</strong> with the same token: the token row is locked, so the second request sees it already used and is treated as reuse. That's strict, but safe.</li>
+  <li><strong>Tokens travel in the JSON body,</strong> not cookies. This is an API-only service, and it keeps Swagger testing easy. A browser frontend would use httpOnly cookies instead.</li>
+  <li><strong>Audit:</strong> <code>LOGIN_SUCCEEDED</code>, <code>LOGIN_FAILED</code>, <code>LOGOUT</code> and <code>REFRESH_TOKEN_REUSE_DETECTED</code> are recorded. Normal refreshes aren't, to avoid noise.</li>
+</ul>
+<div class="callout warn">
+  <p><strong>Trade-off:</strong> after logout, the access token keeps working until it expires, at most 15 minutes. That's the price of not checking a blocklist on every request.</p>
+</div>
+
+<nav class="pager" aria-label="Previous and next page">
+  <a class="prev" href="api.html"><span>Previous</span>← 4. API</a>
+  <a class="next" href="data-model.html"><span>Next</span>6. Data model →</a>
+</nav>
+</main>
+</div>
+<script type="module">
+  const root = document.documentElement;
+  const dark = root.dataset.theme === 'dark' ||
+    (root.dataset.theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  try {
+    const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs');
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: dark ? 'dark' : 'neutral',
+      fontFamily: getComputedStyle(document.body).fontFamily,
+      flowchart: { curve: 'basis' },
+      sequence: { useMaxWidth: false, mirrorActors: false, wrap: true, width: 160, actorMargin: 40 },
+      er: { useMaxWidth: true }
+    });
+    await mermaid.run({ querySelector: 'pre.mermaid', suppressErrors: true });
+  } catch (err) {
+    console.error(err);
+    document.querySelectorAll('.diagram-note').forEach((el) => { el.hidden = false; });
+  }
+</script>
+</body>
+</html>

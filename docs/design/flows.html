@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flows &amp; reliability · Merchant Onboarding Design</title>
+<meta name="description" content="End-to-end sequences, the background risk check with retries and idempotency, and row locks for simultaneous actions.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f7f9;
+    --text: #1b1f27;
+    --muted: #5d6675;
+    --border: #e2e6ec;
+    --accent: #2b62d9;
+    --accent-soft: #e9f0fd;
+    --ok: #1d7f47;
+    --ok-soft: #e5f4ec;
+    --warn: #9a5b00;
+    --warn-soft: #fff3dc;
+    --bad: #b8322a;
+    --bad-soft: #fdebe9;
+    --code-bg: #eef1f5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1218;
+      --surface: #161a22;
+      --text: #e5e8ee;
+      --muted: #9aa3b3;
+      --border: #2a303c;
+      --accent: #7aa5ff;
+      --accent-soft: #1a2540;
+      --ok: #56c98d;
+      --ok-soft: #132a1f;
+      --warn: #f2b44f;
+      --warn-soft: #2d2210;
+      --bad: #ff7a6e;
+      --bad-soft: #311816;
+      --code-bg: #1e232d;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1218;
+    --surface: #161a22;
+    --text: #e5e8ee;
+    --muted: #9aa3b3;
+    --border: #2a303c;
+    --accent: #7aa5ff;
+    --accent-soft: #1a2540;
+    --ok: #56c98d;
+    --ok-soft: #132a1f;
+    --warn: #f2b44f;
+    --warn-soft: #2d2210;
+    --bad: #ff7a6e;
+    --bad-soft: #311816;
+    --code-bg: #1e232d;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .layout {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 16px 80px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  @media (min-width: 1000px) {
+    .layout { grid-template-columns: 230px minmax(0, 1fr); gap: 40px; padding: 40px 32px 96px; }
+    nav.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+  }
+  nav.toc { font-size: .9rem; }
+  nav.toc .toc-title { font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: .75rem; letter-spacing: .06em; margin: 0 0 8px 10px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc a { display: block; padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  nav.toc a:hover { background: var(--surface); color: var(--text); }
+  main { min-width: 0; }
+  main > :not(figure.diagram) { max-width: 900px; }
+
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 12px; letter-spacing: -.01em; }
+  h2 { font-size: 1.45rem; line-height: 1.3; margin: 56px 0 12px; padding-top: 24px; border-top: 1px solid var(--border); scroll-margin-top: 8px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  main > h4 { font-size: 1rem; margin: 20px 0 6px; color: var(--muted); }
+  .lede { font-size: 1.08rem; color: var(--muted); margin-top: 0; }
+  .examples-note { font-size: .92rem; color: var(--muted); }
+  a { color: var(--accent); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85em;
+    background: var(--code-bg);
+    padding: .1em .35em;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  ul, ol { padding-left: 1.4em; }
+  li { margin: 4px 0; }
+
+
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr.group td { background: var(--surface); font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  td.c, th.c { text-align: center; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no { color: var(--bad); }
+  .http { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; white-space: nowrap; }
+  .http.ok { color: var(--ok); }
+  .http.err { color: var(--bad); }
+
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout p { margin: 0; }
+  .callout p + p { margin-top: 8px; }
+
+  figure.diagram { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 16px; margin: 12px 0 20px; overflow-x: auto; }
+  figure.diagram pre.mermaid { margin: 0; font-size: .78rem; color: var(--muted); white-space: pre; }
+  figure.diagram svg { display: block; margin: 0 auto; }
+  figure.diagram.wide svg { min-width: 900px; }
+  figure.diagram figcaption { font-size: .85rem; color: var(--muted); margin-top: 10px; }
+  .diagram-note { font-size: .88rem; }
+  pre.code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 12px 0 20px; overflow-x: auto; font: .8rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre.code code { background: none; padding: 0; font-size: inherit; overflow-wrap: normal; }
+  table.endpoints td:nth-child(2) code { white-space: nowrap; overflow-wrap: normal; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 16px 0; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface); }
+  .card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+  .card ul { margin: 6px 0 0; font-size: .92rem; color: var(--muted); }
+
+  .role { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 1px 7px; border-radius: 6px; vertical-align: 1px; }
+  .role.admin { background: var(--accent-soft); color: var(--accent); }
+  .role.reviewer { background: var(--ok-soft); color: var(--ok); }
+  .role.sales { background: var(--warn-soft); color: var(--warn); }
+
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
+
+  @media print {
+    nav.toc { display: none; }
+    .layout { display: block; padding: 0; }
+    h2 { break-after: avoid; }
+    figure.diagram, .table-wrap { break-inside: avoid; }
+  }
+
+  /* Multi-page navigation */
+  nav.toc .toc-title a { color: inherit; text-decoration: none; }
+  nav.toc a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav.toc ol.sub { margin: 2px 0 8px 14px; padding-left: 6px; border-left: 1px solid var(--border); }
+  nav.toc ol.sub a { font-size: .84rem; padding: 2px 8px; }
+  nav.toc ol.sub code { font-size: .8rem; background: none; padding: 0; }
+  @media (max-width: 999px) { nav.toc ol.sub { display: none; } }
+  .eyebrow { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+  h3 { scroll-margin-top: 8px; }
+  .page-cards a.card { display: block; color: inherit; text-decoration: none; }
+  .page-cards a.card:hover { border-color: var(--accent); }
+  .page-cards a.card h4 { color: var(--accent); }
+  .pager { display: flex; gap: 12px; margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .pager a { display: block; max-width: 48%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-decoration: none; }
+  .pager a:hover { border-color: var(--accent); }
+  .pager a span { display: block; font-size: .75rem; color: var(--muted); }
+  .pager .next { margin-left: auto; text-align: right; }
+  @media print { .pager { display: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc" aria-label="Design pages">
+  <p class="toc-title"><a href="index.html">Merchant Onboarding Design</a></p>
+  <ol>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="access.html">1. Roles &amp; access</a></li>
+    <li><a href="lifecycle.html">2. Lifecycle</a></li>
+    <li><a href="flows.html" aria-current="page">3. Flows &amp; reliability</a>
+      <ol class="sub"><li><a href="#flows">End-to-end flows</a></li><li><a href="#async">Background risk check</a></li><li><a href="#concurrency">Concurrency: row locks</a></li></ol></li>
+    <li><a href="api.html">4. API</a></li>
+    <li><a href="auth.html">5. Authentication</a></li>
+    <li><a href="data-model.html">6. Data model</a></li>
+    <li><a href="sensitive-data.html">7. Sensitive data</a></li>
+    <li><a href="decisions.html">8. Decision log</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="page-header">
+  <p class="eyebrow">Merchant Onboarding Platform · Design · 3 of 8</p>
+  <h1>Flows &amp; reliability</h1>
+  <p class="lede">End-to-end sequences, the background risk check with retries and idempotency, and row locks for simultaneous actions.</p>
+  <p class="callout warn diagram-note" hidden>The diagrams didn't load. They need an internet connection to fetch the Mermaid library. Each diagram's text source is still shown, and every table in this page works without it.</p>
+</header>
+
+<h2 id="flows">End-to-end flows</h2>
+
+<h3 id="happy-path-from-draft-to-approved">Happy path: from draft to approved</h3>
+
+<h4>Step 1: Sita creates and submits</h4>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Sita as Sita (SALES)
+    participant API as API
+    participant DB as PostgreSQL
+    participant Q as Redis + BullMQ
+    Sita->>API: Create application (business, owners, processing)
+    API->>DB: Insert application as DRAFT, owners with encrypted national IDs, audit entry
+    API-->>Sita: 201 Created
+    Sita->>API: Submit
+    API->>DB: Lock row, DRAFT → SUBMITTED, submission 1, risk PENDING, audit entry
+    API->>Q: Queue risk job (application 101, submission 1)
+    API-->>Sita: 202 Accepted
+</pre>
+<figcaption>The API answers right away. It doesn't wait for the risk check.</figcaption>
+</figure>
+
+<h4>Step 2: The worker runs the risk check</h4>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Q as Redis + BullMQ
+    participant W as Risk worker
+    participant DB as PostgreSQL
+    participant KYB as Simulated KYB
+    Q->>W: Deliver job (application 101, submission 1)
+    W->>DB: Result for submission 1 already saved?
+    DB-->>W: No
+    W->>KYB: Check business and owners
+    KYB-->>W: Score 22, level LOW
+    W->>DB: Lock row, save assessment, SUBMITTED → IN_REVIEW, audit entry
+</pre>
+<figcaption><a href="#async">Background risk check</a> below shows what happens when the provider fails or the job runs twice.</figcaption>
+</figure>
+
+<h4>Step 3: Maya assigns, Ram decides</h4>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Maya as Maya (ADMIN)
+    actor Ram as Ram (REVIEWER)
+    participant API as API
+    participant DB as PostgreSQL
+    Maya->>API: Assign reviewer Ram
+    API->>DB: Lock row, set assigned reviewer, audit entry
+    API-->>Maya: 200 OK
+    Ram->>API: Approve
+    API->>DB: Lock row, IN_REVIEW → APPROVED, insert decision, audit entry
+    API-->>Ram: 200 OK
+</pre>
+<figcaption>Maya can also assign Ram earlier, while the risk check is still running.</figcaption>
+</figure>
+
+<h3 id="request-info-loop">Request-info loop</h3>
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Ram as Ram (REVIEWER)
+    actor Sita as Sita (SALES)
+    participant API as API
+    participant W as Risk worker
+    Ram->>API: Request info, note "Registration number doesn't match"
+    API-->>Ram: 200 OK, status INFO_REQUESTED
+    Sita->>API: View application
+    API-->>Sita: Application with Ram's note
+    Sita->>API: Edit registration number (allowed in INFO_REQUESTED)
+    Sita->>API: Resubmit
+    API->>W: Queue risk job (application 101, submission 2)
+    API-->>Sita: 202 Accepted, status SUBMITTED, risk PENDING
+    Note over W: New risk check for submission 2, then status IN_REVIEW
+    Ram->>API: Approve or reject
+</pre>
+</figure>
+
+<h2 id="async">Background risk check</h2>
+
+<h3 id="why-it-runs-in-the-background">Why it runs in the background</h3>
+<p>Real KYB providers are slow (seconds to minutes) and sometimes fail. If the API waited for them, a request could hang or time out. Instead, submitting puts a job on a <strong>BullMQ</strong> queue (stored in Redis) and the API answers <span class="http ok">202 Accepted</span> immediately. A separate worker picks up the job. We <strong>simulate</strong> the provider, including random delays and failures.</p>
+
+<h3 id="retries-with-backoff">Retries with backoff</h3>
+<p>If the provider call fails, the worker throws an error and BullMQ tries again later, waiting longer each time (exponential backoff, for example 2 s → 4 s → 8 s → 16 s). The number of attempts and the delays are set in configuration. When every attempt has failed, the risk status becomes <code>FAILED</code>, the application stays <code>SUBMITTED</code>, and an ADMIN can trigger a retry.</p>
+
+<h3 id="idempotency-running-twice-has-the-same-effect-as-running-once">Idempotency: running twice has the same effect as running once</h3>
+<p>Duplicates happen in real systems: a double-clicked submit, or a worker that crashes after saving but before marking the job done. Three layers protect us:</p>
+<ol>
+  <li><strong>Queue level:</strong> the job ID is built from the application and submission number, e.g. <code>risk:101:1</code>. BullMQ ignores a new job whose ID already exists.</li>
+  <li><strong>Worker level:</strong> before calling the provider, the worker checks whether a completed result already exists for that application and submission. If it does, it does nothing.</li>
+  <li><strong>Database level:</strong> <code>UNIQUE (application_id, submission_number)</code> on <code>risk_assessments</code>. Even two workers running at the same moment can't store two results.</li>
+</ol>
+
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TD
+    A["Job received<br/>application X, submission N"] --> B{"Completed result for<br/>X + N already saved?"}
+    B -->|yes| Z["Do nothing<br/>(duplicate job)"]
+    B -->|no| C["Decrypt owners' national IDs<br/>call simulated KYB"]
+    C -->|error| R{"Attempts left?"}
+    R -->|yes| S["Throw error<br/>BullMQ retries after backoff"]
+    S --> A
+    R -->|no| F["Save assessment as FAILED<br/>risk status FAILED<br/>audit RISK_ASSESSMENT_FAILED"]
+    C -->|success| L["BEGIN, lock application row"]
+    L --> M{"Still SUBMITTED and<br/>on submission N?"}
+    M -->|no| Y["Stale job<br/>change nothing"]
+    M -->|yes| U["Save assessment as COMPLETED<br/>copy risk level, SUBMITTED → IN_REVIEW<br/>audit entry, COMMIT"]
+</pre>
+<figcaption>The "still on submission N?" check is a safety net: a late job for an old submission can never overwrite a newer one.</figcaption>
+</figure>
+
+<div class="callout warn">
+  <p><strong>Implementation notes</strong></p>
+  <p>A manual ADMIN retry must use a new job ID (e.g. <code>risk:101:1:r1</code>). BullMQ silently ignores a job whose ID is still stored, even a failed one.</p>
+  <p>The worker never logs decrypted national IDs or the provider's raw request.</p>
+</div>
+
+<h2 id="concurrency">Concurrency: row locks</h2>
+
+<p>Every state-changing action runs inside a database transaction that first <strong>locks the application row</strong> (<code>SELECT … FOR UPDATE</code>). A second request on the same application waits until the first one commits, then checks the new state.</p>
+
+<figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant Ram as Ram (REVIEWER)
+    participant DB as PostgreSQL
+    participant Maya as Maya (ADMIN)
+    Ram->>DB: BEGIN, lock application 101
+    Maya->>DB: BEGIN, lock application 101
+    Note over DB,Maya: Maya's request waits
+    Ram->>DB: Check IN_REVIEW and Ram assigned ✅
+    Ram->>DB: Set APPROVED, insert decision and audit entry
+    Ram->>DB: COMMIT, lock released
+    DB-->>Maya: Lock acquired, row is now APPROVED
+    Maya->>DB: APPROVED is final ❌, ROLLBACK
+    Note over Maya: Response 409 Conflict
+</pre>
+</figure>
+<p>The worker takes the same lock when it saves a risk result, so a reviewer action and a worker update can't clash either. The lock only covers one application row, so different applications never wait for each other.</p>
+
+<nav class="pager" aria-label="Previous and next page">
+  <a class="prev" href="lifecycle.html"><span>Previous</span>← 2. Lifecycle</a>
+  <a class="next" href="api.html"><span>Next</span>4. API →</a>
+</nav>
+</main>
+</div>
+<script type="module">
+  const root = document.documentElement;
+  const dark = root.dataset.theme === 'dark' ||
+    (root.dataset.theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  try {
+    const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs');
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: dark ? 'dark' : 'neutral',
+      fontFamily: getComputedStyle(document.body).fontFamily,
+      flowchart: { curve: 'basis' },
+      sequence: { useMaxWidth: false, mirrorActors: false, wrap: true, width: 160, actorMargin: 40 },
+      er: { useMaxWidth: true }
+    });
+    await mermaid.run({ querySelector: 'pre.mermaid', suppressErrors: true });
+  } catch (err) {
+    console.error(err);
+    document.querySelectorAll('.diagram-note').forEach((el) => { el.hidden = false; });
+  }
+</script>
+</body>
+</html>
