@@ -1,9 +1,9 @@
 import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
-import { Transform } from 'class-transformer';
 import {
   PageMetaDto,
   PaginationQueryDto,
 } from '@/common/pagination/pagination.dto';
+import { ToBoolean } from '@/common/validation/to-boolean.decorator';
 import type { User } from '@/users/user.entity';
 import { UserRole } from '@/users/user-role.enum';
 
@@ -33,9 +33,7 @@ export class ListUsersQueryDto extends PaginationQueryDto {
   role?: UserRole;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === 'true' ? true : value === 'false' ? false : value,
-  )
+  @ToBoolean()
   @IsBoolean()
   isActive?: boolean;
 }
