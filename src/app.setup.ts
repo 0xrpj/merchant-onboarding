@@ -2,10 +2,14 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from '@/common/errors/all-exceptions.filter';
 import { validationExceptionFactory } from '@/common/errors/validation-errors';
+import { TimeoutInterceptor } from '@/common/interceptors/timeout.interceptor';
+import { accessLogMiddleware } from '@/common/logging/access-log.middleware';
 import { requestIdMiddleware } from '@/common/request-id/request-id.middleware';
 
 export const API_PREFIX = 'api/v1';
 export const DOCS_PATH = 'api/docs';
+// Longest a request may take before the client gets 503.
+const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
  * HTTP behaviour shared by main.ts and the e2e tests,
@@ -14,6 +18,10 @@ export const DOCS_PATH = 'api/docs';
 export const configureApp = (app: INestApplication): void => {
   // First middleware, so every response (errors included) gets an X-Request-Id.
   app.use(requestIdMiddleware);
+  // One log line per request. Off in tests, where it would only be noise.
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(accessLogMiddleware);
+  }
 
   // Every route lives under /api/v1. A future v2 can sit next to it.
   app.setGlobalPrefix(API_PREFIX);
@@ -30,6 +38,8 @@ export const configureApp = (app: INestApplication): void => {
       exceptionFactory: validationExceptionFactory,
     }),
   );
+
+  app.useGlobalInterceptors(new TimeoutInterceptor(REQUEST_TIMEOUT_MS));
 
   // Every error leaves the API in the same JSON shape.
   app.useGlobalFilters(new AllExceptionsFilter());

@@ -2,10 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from '@/app.module';
 import { configureApp, setupSwagger } from '@/app.setup';
+import { createLogger } from '@/common/logging/create-logger';
 import type { Env } from '@/config/env.schema';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: createLogger() });
 
   // <Env, true>: get() knows every key and its type, and never returns undefined.
   const config = app.get(ConfigService<Env, true>);
