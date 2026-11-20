@@ -298,7 +298,7 @@ sequenceDiagram
 <h3 id="idempotency-running-twice-has-the-same-effect-as-running-once">Idempotency: running twice has the same effect as running once</h3>
 <p>Duplicates happen in real systems: a double-clicked submit, or a worker that crashes after saving but before marking the job done. Three layers protect us:</p>
 <ol>
-  <li><strong>Queue level:</strong> the job ID is built from the application and submission number, e.g. <code>risk:101:1</code>. BullMQ ignores a new job whose ID already exists.</li>
+  <li><strong>Queue level:</strong> the job ID is built from the application and submission number, e.g. <code>risk-101-1</code>. BullMQ ignores a new job whose ID already exists. (BullMQ doesn't allow <code>:</code> in custom job IDs, hence the dashes.)</li>
   <li><strong>Worker level:</strong> before calling the provider, the worker checks whether a completed result already exists for that application and submission. If it does, it does nothing.</li>
   <li><strong>Database level:</strong> <code>UNIQUE (application_id, submission_number)</code> on <code>risk_assessments</code>. Even two workers running at the same moment can't store two results.</li>
 </ol>
@@ -323,7 +323,7 @@ flowchart TD
 
 <div class="callout warn">
   <p><strong>Implementation notes</strong></p>
-  <p>A manual ADMIN retry must use a new job ID (e.g. <code>risk:101:1:r1</code>). BullMQ silently ignores a job whose ID is still stored, even a failed one.</p>
+  <p>A manual ADMIN retry must use a new job ID (e.g. <code>risk-101-1-retry-&lt;timestamp&gt;</code>). BullMQ silently ignores a job whose ID is still stored, even a failed one.</p>
   <p>The worker never logs decrypted national IDs or the provider's raw request.</p>
 </div>
 
