@@ -36,6 +36,10 @@ export const buildDataSourceOptions = (
   // The schema changes only through reviewed migrations. Never auto-sync from entities.
   synchronize: false,
   namingStrategy: new SnakeNamingStrategy(),
+  // UUID primary keys use gen_random_uuid(), built into Postgres 13+.
+  // No extension to install, so the app's database user needs no superuser rights.
+  uuidExtension: 'pgcrypto',
+  installExtensions: false,
 
   // Shows in Postgres' pg_stat_activity, so our connections are easy to spot.
   applicationName: 'merchant-onboarding-api',

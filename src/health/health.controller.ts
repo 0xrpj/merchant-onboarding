@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Public } from '@/auth/decorators/public.decorator';
 import {
   HealthCheck,
   HealthCheckService,
@@ -12,6 +13,8 @@ import {
  * Redis is added here once the queue exists.
  */
 @ApiTags('System')
+// Docker and load balancers call this without logging in.
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(
