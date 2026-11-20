@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { DataSource } from 'typeorm';
 import { AppModule } from '@/app.module';
 import { configureApp } from '@/app.setup';
 
@@ -23,11 +24,21 @@ describe('Health (e2e)', () => {
     await app.close();
   });
 
-  it('GET /api/v1/health answers 200 with status ok', async () => {
-    await request(app.getHttpServer())
+  it('GET /api/v1/health reports the database as up', async () => {
+    const res = await request(app.getHttpServer())
       .get('/api/v1/health')
-      .expect(200)
-      .expect({ status: 'ok' });
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      status: 'ok',
+      info: { database: { status: 'up' } },
+    });
+  });
+
+  it('connects to the test database, never the dev one', () => {
+    const dataSource = app.get(DataSource);
+
+    expect(dataSource.options.database).toMatch(/_test$/);
   });
 
   it('GET /health without the prefix is 404', async () => {

@@ -1,18 +1,30 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-
-export type HealthStatus = { status: 'ok' };
+import { ApiTags } from '@nestjs/swagger';
+import {
+  HealthCheck,
+  HealthCheckService,
+  TypeOrmHealthIndicator,
+} from '@nestjs/terminus';
 
 /**
- * Liveness check. Docker Compose and load balancers call this to see if the app is up.
- * Database and Redis checks are added once those connections exist.
+ * Readiness check. Docker Compose and load balancers call this.
+ * 200 when every dependency answers, 503 when one doesn't.
+ * Redis is added here once the queue exists.
  */
 @ApiTags('System')
 @Controller('health')
 export class HealthController {
+  constructor(
+    private readonly health: HealthCheckService,
+    private readonly db: TypeOrmHealthIndicator,
+  ) {}
+
   @Get()
-  @ApiOkResponse({ description: 'The app is running.' })
-  check(): HealthStatus {
-    return { status: 'ok' };
+  @HealthCheck()
+  check() {
+    return this.health.check([
+      // Runs `SELECT 1`. Counts as down if Postgres doesn't answer within 1 second.
+      () => this.db.pingCheck('database', { timeout: 1_000 }),
+    ]);
   }
 }

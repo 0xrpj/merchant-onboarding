@@ -30,6 +30,8 @@ const DEFAULT_CODES: Partial<Record<number, ErrorCode>> = {
   404: ErrorCode.NOT_FOUND,
   409: ErrorCode.INVALID_STATE_TRANSITION,
   429: ErrorCode.RATE_LIMITED,
+  // e.g. the health check when Postgres is down.
+  503: ErrorCode.SERVICE_UNAVAILABLE,
 };
 
 const GENERIC_SERVER_MESSAGE = 'An unexpected error occurred';

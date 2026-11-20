@@ -15,7 +15,7 @@ describe('envSchema', () => {
 
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
-    expect(env.POSTGRES_PORT).toBe(5432);
+    expect(env.POSTGRES_PORT).toBe(5433);
     expect(env.REDIS_PORT).toBe(6379);
   });
 

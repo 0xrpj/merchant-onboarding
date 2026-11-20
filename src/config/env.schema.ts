@@ -15,7 +15,8 @@ export const envSchema = z.object({
   PORT: port.default(3000),
 
   POSTGRES_HOST: text,
-  POSTGRES_PORT: port.default(5432),
+  // Same default as compose.yaml.
+  POSTGRES_PORT: port.default(5433),
   POSTGRES_USER: text,
   POSTGRES_PASSWORD: text,
   POSTGRES_DB: text,
