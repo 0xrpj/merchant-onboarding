@@ -22,22 +22,19 @@ const toRiskAssessmentDto = (
   assessment: RiskAssessment,
   viewer: UserRole,
 ): RiskAssessmentResponseDto => {
-  const base: RiskAssessmentResponseDto = {
+  const dto: RiskAssessmentResponseDto = {
     submissionNumber: assessment.submissionNumber,
     status: assessment.status,
     riskLevel: assessment.riskLevel,
     attempts: assessment.attempts,
     completedAt: assessment.completedAt,
   };
-  if (viewer === UserRole.SALES) {
-    return base;
+  if (viewer !== UserRole.SALES) {
+    dto.riskScore = assessment.riskScore;
+    dto.reasons = assessment.reasons;
+    dto.lastError = assessment.lastError;
   }
-  return {
-    ...base,
-    riskScore: assessment.riskScore,
-    reasons: assessment.reasons,
-    lastError: assessment.lastError,
-  };
+  return dto;
 };
 
 const requireLoaded = <T>(value: T | undefined, name: string): T => {
@@ -68,7 +65,18 @@ export const toApplicationDetail = (
   app: MerchantApplication,
   viewer: UserRole,
 ): ApplicationDto => ({
-  ...toApplicationSummary(app),
+  id: app.id,
+  businessName: app.businessName,
+  status: app.status,
+  riskStatus: app.riskStatus,
+  riskLevel: app.riskLevel,
+  createdBy: toUserRef(requireLoaded(app.createdBy, 'createdBy')),
+  assignedReviewer: app.assignedReviewer
+    ? toUserRef(app.assignedReviewer)
+    : null,
+  submissionCount: app.submissionCount,
+  createdAt: app.createdAt,
+  updatedAt: app.updatedAt,
   legalBusinessName: app.legalBusinessName,
   businessType: app.businessType,
   industry: app.industry,

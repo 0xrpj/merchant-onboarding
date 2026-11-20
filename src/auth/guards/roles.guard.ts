@@ -1,14 +1,12 @@
 import {
   type CanActivate,
   type ExecutionContext,
-  HttpStatus,
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { assertRole } from '@/auth/assert-role';
 import type { AuthenticatedRequest } from '@/auth/auth-user';
 import { ROLES_KEY } from '@/auth/decorators/roles.decorator';
-import { AppException } from '@/common/errors/app.exception';
-import { ErrorCode } from '@/common/errors/error-codes';
 import type { UserRole } from '@/users/user-role.enum';
 
 /** Global guard, runs after JwtAuthGuard: checks @Roles(...). 403 if the role can never do this. */
@@ -26,13 +24,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const user = context.switchToHttp().getRequest<AuthenticatedRequest>().user;
-    if (!user || !roles.includes(user.role)) {
-      throw new AppException(
-        HttpStatus.FORBIDDEN,
-        ErrorCode.FORBIDDEN,
-        'Your role cannot perform this action',
-      );
-    }
+    assertRole(user, roles);
     return true;
   }
 }
