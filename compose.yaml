@@ -1,12 +1,30 @@
 # Local infrastructure: PostgreSQL (data) and Redis (BullMQ queue).
 # Values come from .env (copy .env.example to .env first).
 #
-#   docker compose up -d     start in the background
-#   docker compose ps        both services should be "healthy"
-#   docker compose down      stop (data is kept in the volumes)
-#   docker compose down -v   stop and DELETE all data
+#   docker compose up -d                 start Postgres and Redis only (for npm run start:dev)
+#   docker compose --profile app up -d   also build and start migrate, api and worker
+#   docker compose ps                    services should be "healthy"
+#   docker compose down                  stop (data is kept in the volumes)
+#   docker compose down -v               stop and DELETE all data
 
 name: merchant-onboarding
+
+# Shared by migrate, api and worker: same image, same settings.
+x-app-env:
+  &app-env # Inside Compose the services reach each other by name, on their own ports.
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+
+x-app: &app
+  profiles: [app]
+  image: merchant-onboarding-api:local
+  build: .
+  restart: unless-stopped
+  # Secrets come from your local .env, never from this file.
+  env_file: .env
+  environment: *app-env
 
 services:
   postgres:
@@ -38,7 +56,14 @@ services:
     restart: unless-stopped
     # appendonly: queued jobs survive a Redis restart.
     # noeviction: Redis never silently drops keys when memory is full. BullMQ requires this.
-    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
     ports:
       - '127.0.0.1:${REDIS_PORT:-6379}:6379'
     volumes:
@@ -48,6 +73,56 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # --- The app itself (profile "app"): one image, three commands ---
+
+  # Applies pending migrations, then exits. api and worker wait for it.
+  migrate:
+    <<: *app
+    command:
+      [
+        'node',
+        'node_modules/typeorm/cli.js',
+        '-d',
+        'dist/database/data-source.js',
+        'migration:run',
+      ]
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      # The worker runs as its own service below.
+      RUN_RISK_WORKER: 'false'
+    ports:
+      # API_HOST_PORT lets you avoid a clash with `npm run start:dev` on 3000.
+      - '127.0.0.1:${API_HOST_PORT:-3000}:${PORT:-3000}'
+    depends_on: &app-depends
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/v1/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # The background risk worker. Scale it: docker compose --profile app up -d --scale worker=3
+  worker:
+    <<: *app
+    command: ['node', 'dist/worker']
+    depends_on: *app-depends
 
 volumes:
   postgres-data:

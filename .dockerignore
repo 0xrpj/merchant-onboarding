@@ -1,0 +1,11 @@
+# Keep the build context small and secret-free.
+.env
+.env.*
+!.env.example
+.git
+node_modules
+dist
+coverage
+*.tsbuildinfo
+docs
+test
