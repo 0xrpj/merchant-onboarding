@@ -24,14 +24,14 @@ describe('Health (e2e)', () => {
     await app.close();
   });
 
-  it('GET /api/v1/health reports the database as up', async () => {
+  it('GET /api/v1/health reports the database and Redis as up', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200);
 
     expect(res.body).toMatchObject({
       status: 'ok',
-      info: { database: { status: 'up' } },
+      info: { database: { status: 'up' }, redis: { status: 'up' } },
     });
   });
 
