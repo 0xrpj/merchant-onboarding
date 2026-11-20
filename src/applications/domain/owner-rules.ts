@@ -11,7 +11,9 @@ type OwnerShare = { ownershipPercent: number; isPrimaryContact: boolean };
  * Total ownership in percent. Added up in hundredths (whole numbers), so
  * 33.33 + 33.33 + 33.34 is exactly 100 with no floating-point error.
  */
-export const totalOwnershipPercent = (owners: readonly OwnerShare[]): number =>
+export const totalOwnershipPercent = (
+  owners: readonly Pick<OwnerShare, 'ownershipPercent'>[],
+): number =>
   owners.reduce(
     (sum, owner) => sum + Math.round(owner.ownershipPercent * 100),
     0,

@@ -1,3 +1,8 @@
+/** Thrown by withTimeout. Its message is ours, so it is safe to store and log. */
+export class TimeoutError extends Error {
+  override readonly name = 'TimeoutError';
+}
+
 /**
  * Rejects if `promise` takes longer than `ms`. Every call to another system
  * (here: Redis) gets a time limit, so a request never hangs on it.
@@ -10,7 +15,7 @@ export const withTimeout = async <T>(
 ): Promise<T> => {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
+    timer = setTimeout(() => reject(new TimeoutError(message)), ms);
   });
   try {
     return await Promise.race([promise, timeout]);
